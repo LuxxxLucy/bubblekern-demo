@@ -1,6 +1,6 @@
 # Kern: experiments
 
-see https://luxxxlucy.github.io/projects/2023_kern/kerning.html
+see https://luxxxlucy.github.io/projects/2023_kerning/kerning.html
 
 ## Definition
 
