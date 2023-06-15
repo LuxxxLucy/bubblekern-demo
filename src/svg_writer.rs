@@ -1,15 +1,4 @@
-pub struct LayoutBox {
-    pub x: f64,
-    pub y: f64,
-    pub width: f64,
-    pub height: f64,
-}
-
-pub struct LayoutSpec {
-    pub x: f64,
-    pub y: f64,
-    pub scale: f64,
-}
+use crate::LayoutBox;
 
 pub fn svg_with_header(b: &LayoutBox) -> xmlwriter::XmlWriter {
     let mut svg = xmlwriter::XmlWriter::new(xmlwriter::Options::default());
@@ -98,6 +87,82 @@ pub fn write_glyph_to_svg(
     svg.end_element();
 }
 
+pub fn write_glyph_metrics_to_svg(
+    id: ttf::GlyphId,
+    face: &ttf::Face,
+    bbox: &LayoutBox,
+    svg: &mut xmlwriter::XmlWriter,
+) {
+    write_glyph_embox_to_svg(id, face, bbox, svg);
+    write_glyph_horizontal_metric("baseline", 0., id, face, bbox, svg);
+    write_glyph_horizontal_metric(
+        "cap height",
+        face.capital_height().unwrap().into(),
+        id,
+        face,
+        bbox,
+        svg,
+    );
+    write_glyph_horizontal_metric(
+        "x height",
+        face.x_height().unwrap().into(),
+        id,
+        face,
+        bbox,
+        svg,
+    );
+    write_glyph_horizontal_metric("ascender", face.ascender() as f64, id, face, bbox, svg);
+    write_glyph_horizontal_metric("descender", face.descender() as f64, id, face, bbox, svg);
+    write_glyph_vertical_metric(
+        "",
+        face.glyph_hor_side_bearing(id).unwrap() as f64,
+        id,
+        face,
+        bbox,
+        svg,
+    );
+    write_glyph_vertical_metric(
+        "",
+        face.glyph_hor_advance(id).unwrap() as f64
+            - face.glyph_hor_side_bearing(id).unwrap() as f64,
+        id,
+        face,
+        bbox,
+        svg,
+    );
+    write_glyph_horizontal_segment_metric(
+        "left bearing",
+        -50.,
+        0.,
+        face.glyph_hor_side_bearing(id).unwrap() as f64,
+        id,
+        face,
+        bbox,
+        svg,
+    );
+    write_glyph_horizontal_segment_metric(
+        "right bearing",
+        -50.,
+        face.glyph_hor_advance(id).unwrap() as f64
+            - face.glyph_hor_side_bearing(id).unwrap() as f64,
+        face.glyph_hor_advance(id).unwrap() as f64,
+        id,
+        face,
+        bbox,
+        svg,
+    );
+    write_glyph_horizontal_segment_metric(
+        "advance width",
+        -100.,
+        0.,
+        face.glyph_hor_advance(id).unwrap() as f64,
+        id,
+        face,
+        bbox,
+        svg,
+    );
+}
+
 pub fn write_glyph_embox_to_svg(
     glyph_id: ttf::GlyphId,
     face: &ttf::Face,
@@ -116,7 +181,7 @@ pub fn write_glyph_embox_to_svg(
     svg.end_element();
 }
 
-pub fn write_glyph_char_info(c: char, bbox: &LayoutBox, svg: &mut xmlwriter::XmlWriter) {
+pub fn write_glyph_char_info(c: &str, bbox: &LayoutBox, svg: &mut xmlwriter::XmlWriter) {
     svg.start_element("text");
     svg.write_attribute("x", &(bbox.x + 2.0));
     svg.write_attribute("y", &(bbox.y + bbox.height - 4.0));
@@ -168,7 +233,6 @@ pub fn write_glyph_horizontal_metric(
     bbox: &LayoutBox,
     svg: &mut xmlwriter::XmlWriter,
 ) {
-    println!("Glyph info: {} is {}", annotation, metric_value);
     write_line_in_glyph_coordinate(
         0.0,
         metric_value,
@@ -199,7 +263,6 @@ pub fn write_glyph_vertical_metric(
     bbox: &LayoutBox,
     svg: &mut xmlwriter::XmlWriter,
 ) {
-    println!("Glyph info: {} is {}", annotation, metric_value);
     write_line_in_glyph_coordinate(
         metric_value,
         face.descender() as f64,
@@ -222,6 +285,7 @@ pub fn write_glyph_vertical_metric(
     svg.end_element();
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn write_glyph_horizontal_segment_metric(
     annotation: &str,
     y_offset: f64, // y_offset as in the Glyph origin coordinate
@@ -232,15 +296,13 @@ pub fn write_glyph_horizontal_segment_metric(
     bbox: &LayoutBox,
     svg: &mut xmlwriter::XmlWriter,
 ) {
-    println!("Glyph info: {} is {}", annotation, end - start);
-
     let scale = bbox.height / face.height() as f64;
     let x = bbox.x;
     let y = bbox.y + bbox.height + (face.descender() as f64 - y_offset) * scale;
 
     svg.start_element("path");
     svg.write_attribute("fill", "none");
-    svg.write_attribute("stroke", "black");
+    svg.write_attribute("stroke", "blue");
     svg.write_attribute("stroke-width", "1");
     svg.write_attribute("marker-end", "url(#head)");
     svg.write_attribute("marker-start", "url(#head)");
@@ -264,7 +326,53 @@ pub fn write_glyph_horizontal_segment_metric(
     svg.write_attribute("x", &(x + (start + (end - start) / 2.) * scale - 12.));
     svg.write_attribute("y", &(y + 5.0));
     svg.write_attribute("font-size", "5");
-    svg.write_attribute("fill", "gray");
+    svg.write_attribute("fill", "blue");
     svg.write_text_fmt(format_args!("{}", annotation));
+    svg.end_element();
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn write_glyph_strip(
+    y_offset: f64, // y_offset as in the Glyph origin coordinate
+    start: f64,
+    end: f64, // start and end all in glyph origin coordinate
+    color: &str,
+    _glyph_id: ttf::GlyphId,
+    face: &ttf::Face,
+    bbox: &LayoutBox,
+    svg: &mut xmlwriter::XmlWriter,
+) {
+    let scale = bbox.height / face.height() as f64;
+    let x = bbox.x;
+    let y = bbox.y + bbox.height + (face.descender() as f64 - y_offset) * scale;
+
+    svg.start_element("path");
+    svg.write_attribute("stroke", color);
+    svg.write_attribute("stroke-opacity", "0.5");
+    svg.write_attribute("stroke-width", "5");
+    svg.write_attribute("marker-end", "url(#head)");
+    svg.write_attribute("marker-start", "url(#head)");
+
+    let mut path = String::with_capacity(256);
+    use std::fmt::Write;
+    write!(
+        &mut path,
+        "M {} {} L {} {} ",
+        x + start * scale,
+        y,
+        x + end * scale,
+        y,
+    )
+    .unwrap();
+    path.pop();
+    svg.write_attribute("d", &path);
+    svg.end_element();
+
+    svg.start_element("text");
+    svg.write_attribute("x", &(x + (start + (end - start) / 2.) * scale - 2.));
+    svg.write_attribute("y", &(y + 10.0));
+    svg.write_attribute("font-size", "5");
+    svg.write_attribute("fill", color);
+    svg.write_text_fmt(format_args!("{}", &(end - start)));
     svg.end_element();
 }

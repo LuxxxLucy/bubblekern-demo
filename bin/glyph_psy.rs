@@ -1,6 +1,7 @@
 use ttf_parser as ttf;
 
 use kern_demo::svg_writer::*;
+use kern_demo::LayoutBox;
 
 use clap::Parser;
 
@@ -31,118 +32,85 @@ fn main() {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+fn draw_single_glyph(
+    x_margin: f64,
+    y_margin: f64,
+    height: f64,
+    face: &ttf::Face,
+    id: ttf::GlyphId,
+    output_path: &std::path::PathBuf,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let scale = height / face.height() as f64;
+    let glyph_width = face.glyph_hor_advance(id).unwrap() as f64 * scale;
+
+    let canvas_box = LayoutBox {
+        x: 0.,
+        y: 0.,
+        width: 2. * x_margin + glyph_width,
+        height: 2. * y_margin + height,
+    };
+    // main canvas
+    let mut svg = svg_with_header(&canvas_box);
+    // misc information: write the char at the corner
+    write_glyph_char_info(face.glyph_name(id).unwrap(), &canvas_box, &mut svg);
+
+    let main_box = LayoutBox {
+        x: x_margin,
+        y: y_margin,
+        width: glyph_width,
+        height,
+    };
+
+    write_glyph_to_svg(id, face, &main_box, &mut svg);
+    write_glyph_metrics_to_svg(id, face, &main_box, &mut svg);
+
+    // output
+    svg_output(output_path, svg)?;
+    Ok(())
+}
+
 fn process(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     let font_data = std::fs::read(&args.font_source_path)?;
     #[allow(unused_mut)]
     let mut face = ttf::Face::parse(&font_data, 0)?;
     let c = args.glyph;
-    let id = face.glyph_index(c).unwrap();
+    let id = face.glyph_index(c).ok_or(format!(
+        "this glyph {} not found in this font {:?}",
+        c, args.font_source_path
+    ))?;
 
-    let canvas_box = LayoutBox {
-        x: 0.,
-        y: 0.,
-        width: 500.,
-        height: 500.,
-    };
-    let mut svg = svg_with_header(&canvas_box);
-
-    // main canvas
-    write_box_to_svg(&canvas_box, &mut svg);
-    // misc information: write the char at the corner
-    write_glyph_char_info(c, &canvas_box, &mut svg);
-
-    let main_box = LayoutBox {
-        x: 100.,
-        y: 50.,
-        width: 400.,
-        height: 400.,
-    };
-    write_glyph_to_svg(id, &face, &main_box, &mut svg);
-    write_glyph_embox_to_svg(id, &face, &main_box, &mut svg);
-
-    write_glyph_horizontal_metric("baseline", 0., id, &face, &main_box, &mut svg);
-    write_glyph_horizontal_metric(
-        "cap height",
-        face.capital_height().unwrap().into(),
-        id,
+    draw_single_glyph(
+        100., // x_margin
+        100., // y_margin
+        300., // height
         &face,
-        &main_box,
-        &mut svg,
-    );
-    write_glyph_horizontal_metric(
-        "x height",
-        face.x_height().unwrap().into(),
         id,
-        &face,
-        &main_box,
-        &mut svg,
-    );
-    write_glyph_horizontal_metric(
-        "ascender",
-        face.ascender() as f64,
-        id,
-        &face,
-        &main_box,
-        &mut svg,
-    );
-    write_glyph_horizontal_metric(
-        "descender",
-        face.descender() as f64,
-        id,
-        &face,
-        &main_box,
-        &mut svg,
-    );
-    write_glyph_vertical_metric(
-        "",
-        face.glyph_hor_side_bearing(id).unwrap() as f64,
-        id,
-        &face,
-        &main_box,
-        &mut svg,
-    );
-    write_glyph_vertical_metric(
-        "",
-        face.glyph_hor_advance(id).unwrap() as f64
-            - face.glyph_hor_side_bearing(id).unwrap() as f64,
-        id,
-        &face,
-        &main_box,
-        &mut svg,
-    );
-    write_glyph_horizontal_segment_metric(
-        "left bearing",
-        -50.,
-        0.,
-        face.glyph_hor_side_bearing(id).unwrap() as f64,
-        id,
-        &face,
-        &main_box,
-        &mut svg,
-    );
-    write_glyph_horizontal_segment_metric(
-        "right bearing",
-        -50.,
-        face.glyph_hor_advance(id).unwrap() as f64
-            - face.glyph_hor_side_bearing(id).unwrap() as f64,
-        face.glyph_hor_advance(id).unwrap() as f64,
-        id,
-        &face,
-        &main_box,
-        &mut svg,
-    );
-    write_glyph_horizontal_segment_metric(
-        "advance width",
-        -100.,
-        0.,
-        face.glyph_hor_advance(id).unwrap() as f64,
-        id,
-        &face,
-        &main_box,
-        &mut svg,
-    );
-
-    // output
-    svg_output(&args.output_path, svg)?;
+        &args.output_path,
+    )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::process;
+    use crate::Args;
+
+    use file_diff::diff;
+
+    #[test]
+    fn singel_glyph_show() {
+        let font_path = "./asset/Helvetica.ttc";
+        let output_path = "glyph_psy_Helvetica_A_test.svg";
+        let ground_truth_output_path = "./asset/result/Helvetica A.svg";
+        let test_arg = Args {
+            font_source_path: font_path.into(),
+            output_path: output_path.into(),
+            glyph: 'A',
+        };
+        assert!(process(test_arg).is_ok());
+        assert!(std::path::Path::new(output_path).exists());
+        assert!(diff(output_path, ground_truth_output_path));
+        assert!(std::fs::remove_file(output_path).is_ok());
+    }
 }

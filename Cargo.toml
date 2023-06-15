@@ -7,9 +7,20 @@ edition = "2021"
 name = "glyph_psy"
 path = "bin/glyph_psy.rs"
 
+[[bin]]
+name = "kern_psy"
+path = "bin/kern_psy.rs"
+
+[[bin]]
+name = "kern_sol"
+path = "bin/kern_sol.rs"
+
 [dependencies]
 base64 = "0.21.0"
 clap = { version = "4.3.0", features = ["derive"] }
+z3 = {version="0.11.2", features = ["static-link-z3"]}
+file_diff = "1.0.0"
+itertools = "0.10.5"
 pico-args = "0.5.0"
 ttf-parser = { version = "0.19.0", features = ["std", "opentype-layout", "apple-layout", "variable-fonts", "glyph-names"] }
 xmlwriter = "0.1.0"
