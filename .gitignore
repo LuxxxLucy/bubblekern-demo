@@ -1,1 +1,4 @@
 /target
+/result
+*.svg
+.z3-trace
